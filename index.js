@@ -87,13 +87,46 @@ server.listen(PORT, () => {
 
 console.log('🚀 Punjab Graphics WhatsApp Bot شروع ہو رہا ہے...');
 
+// ── Chromium Path خود تلاش کرے ──
+function getChromiumPath() {
+    const paths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/nix/var/nix/profiles/default/bin/chromium',
+        '/run/current-system/sw/bin/chromium'
+    ];
+
+    const fs = require('fs');
+    for (const p of paths) {
+        if (p && fs.existsSync(p)) {
+            console.log(`✅ Chromium ملا: ${p}`);
+            return p;
+        }
+    }
+
+    // اگر کوئی نہ ملے تو puppeteer کا اپنا
+    try {
+        const puppeteer = require('puppeteer');
+        const path = puppeteer.executablePath();
+        console.log(`✅ Puppeteer chromium: ${path}`);
+        return path;
+    } catch (e) {
+        console.log('⚠️ Puppeteer path نہیں ملا');
+        return null;
+    }
+}
+
 // ── WhatsApp Client ──
-const client = new Client({
+const chromiumPath = getChromiumPath();
+
+const clientOptions = {
     authStrategy: new LocalAuth({
         dataPath: '/tmp/.wwebjs_auth'
     }),
     puppeteer: {
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/run/current-system/sw/bin/chromium',
         headless: true,
         args: [
             '--no-sandbox',
@@ -114,11 +147,16 @@ const client = new Client({
             '--mute-audio',
             '--safebrowsing-disable-auto-update',
             '--ignore-certificate-errors',
-            '--ignore-ssl-errors',
-            '--ignore-certificate-errors-spki-list'
+            '--ignore-ssl-errors'
         ],
     }
-});
+};
+
+if (chromiumPath) {
+    clientOptions.puppeteer.executablePath = chromiumPath;
+}
+
+const client = new Client(clientOptions);
 
 // ── Events ──
 client.on('qr', (qr) => {
