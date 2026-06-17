@@ -1,14 +1,46 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
 const axios = require('axios');
-
-// =============================================
-// PUNJAB GRAPHICS - WhatsApp Bot
-// =============================================
+const http = require('http');
+const QRCode = require('qrcode');
 
 const WEBSITE_URL = process.env.WEBSITE_URL || 'https://punjabgraphics.kesug.com';
-const CHECK_INTERVAL = process.env.CHECK_INTERVAL || '0 9 * * *'; // روزانہ صبح 9 بجے
+const CHECK_INTERVAL = process.env.CHECK_INTERVAL || '0 9 * * *';
+const PORT = process.env.PORT || 3000;
+
+let currentQR = null;
+let isConnected = false;
+
+// ── Simple Web Server QR دکھانے کے لیے ──
+const server = http.createServer(async (req, res) => {
+    if (req.url === '/') {
+        if (isConnected) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<html><body style="background:#25D366;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><h1 style="color:white;font-size:48px">✅ WhatsApp Connected!</h1></body></html>');
+        } else if (currentQR) {
+            const qrImage = await QRCode.toDataURL(currentQR);
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<html><body style="text-align:center;font-family:Arial;padding:20px">
+                <h2>Punjab Graphics WhatsApp Bot</h2>
+                <p>اپنے WhatsApp سے یہ QR Code scan کریں</p>
+                <img src="${qrImage}" style="width:300px;height:300px">
+                <p><small>WhatsApp > Linked Devices > Link a Device</small></p>
+                <script>setTimeout(()=>location.reload(),30000)</script>
+            </body></html>`);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<html><body style="text-align:center;padding:50px"><h2>⏳ QR Code لوڈ ہو رہا ہے...</h2><script>setTimeout(()=>location.reload(),5000)</script></body></html>');
+        }
+    } else {
+        res.writeHead(404);
+        res.end('Not found');
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`🌐 Web server شروع: port ${PORT}`);
+});
 
 console.log('🚀 Punjab Graphics WhatsApp Bot شروع ہو رہا ہے...');
 
@@ -28,90 +60,57 @@ const client = new Client({
     }
 });
 
-// QR Code دکھائیں
 client.on('qr', (qr) => {
-    console.log('\n📱 WhatsApp سے connect کرنے کے لیے یہ QR Code scan کریں:\n');
+    currentQR = qr;
+    isConnected = false;
+    console.log('📱 QR Code تیار ہے — ویب پیج کھولیں');
     qrcode.generate(qr, { small: true });
 });
 
-// Connected
 client.on('ready', () => {
+    isConnected = true;
+    currentQR = null;
     console.log('✅ WhatsApp Bot کامیابی سے connect ہو گیا!');
     startScheduler();
 });
 
-// Disconnected
 client.on('disconnected', (reason) => {
-    console.log('❌ WhatsApp disconnect ہو گیا:', reason);
-    console.log('🔄 دوبارہ connect ہو رہا ہے...');
+    isConnected = false;
+    console.log('❌ WhatsApp disconnect:', reason);
     client.initialize();
 });
 
-// =============================================
-// Scheduler — مقررہ وقت پر میسج بھیجیں
-// =============================================
 function startScheduler() {
-    console.log('⏰ Scheduler شروع ہو گیا - ' + CHECK_INTERVAL);
-
     cron.schedule(CHECK_INTERVAL, async () => {
         console.log('🔍 Pending balances چیک کر رہے ہیں...');
         await sendPendingReminders();
-    }, {
-        timezone: "Asia/Karachi"
-    });
+    }, { timezone: "Asia/Karachi" });
 }
 
-// =============================================
-// Pending Balance والے clients کو reminder
-// =============================================
 async function sendPendingReminders() {
     try {
-        const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList`, {
-            headers: { 'Cookie': 'PHPSESSID=bot_session' }
-        });
-
+        const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList`);
         const pendingList = response.data;
+        if (!Array.isArray(pendingList) || pendingList.length === 0) return;
 
-        if (!Array.isArray(pendingList) || pendingList.length === 0) {
-            console.log('✅ کوئی pending balance نہیں');
-            return;
-        }
-
-        console.log(`📋 ${pendingList.length} clients کو reminder بھیجنا ہے`);
-
-        for (const client_data of pendingList) {
-            if (!client_data.phone) continue;
-
-            const phone = formatPhone(client_data.phone);
+        for (const c of pendingList) {
+            if (!c.phone) continue;
+            const phone = formatPhone(c.phone);
             if (!phone) continue;
-
-            const message = `السلام علیکم *${client_data.name}* صاحب! 🙏\n\n` +
-                `Punjab Graphics کی طرف سے یاد دہانی:\n\n` +
-                `📋 Bill No: *${client_data.bill}*\n` +
-                `📅 تاریخ: *${client_data.date}*\n` +
-                `💰 بقایا رقم: *Rs. ${client_data.balance.toLocaleString()}*\n\n` +
-                `براہ کرم جلد ادائیگی فرمائیں۔\n` +
-                `شکریہ 🙏`;
-
+            const msg = `السلام علیکم *${c.name}* صاحب! 🙏\n\nPunjab Graphics یاد دہانی:\n📋 Bill: *${c.bill}*\n💰 بقایا: *Rs. ${c.balance}*\n\nبراہ کرم جلد ادائیگی فرمائیں۔ شکریہ 🙏`;
             try {
-                await client.sendMessage(phone, message);
-                console.log(`✅ میسج بھیجا: ${client_data.name} (${phone})`);
-                await sleep(3000); // 3 سیکنڈ رکیں
-            } catch (err) {
-                console.log(`❌ میسج نہیں بھیجا: ${client_data.name} - ${err.message}`);
+                await client.sendMessage(phone, msg);
+                await sleep(3000);
+            } catch (e) {
+                console.log('میسج error:', e.message);
             }
         }
-
-    } catch (error) {
-        console.log('❌ Data لانے میں خرابی:', error.message);
+    } catch (e) {
+        console.log('API error:', e.message);
     }
 }
 
-// =============================================
-// Phone Number Format کریں
-// =============================================
 function formatPhone(phone) {
-    if (!phone) return null;
     let p = phone.toString().replace(/\D/g, '');
     if (p.startsWith('0')) p = '92' + p.slice(1);
     if (p.startsWith('3')) p = '92' + p;
@@ -119,10 +118,6 @@ function formatPhone(phone) {
     return p + '@c.us';
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Bot شروع کریں
 client.initialize();
-
