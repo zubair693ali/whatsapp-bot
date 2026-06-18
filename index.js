@@ -128,14 +128,15 @@ const clientOptions = {
     }),
     puppeteer: {
         headless: true,
+        // NOTE: '--single-process' اور '--no-zygote' ہٹا دیے گئے ہیں۔
+        // یہ flags نئے Chromium ورژنز میں رینڈرر کریش کرواتے ہیں اور
+        // "Execution context was destroyed" والا error دیتے ہیں۔
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
-            '--no-zygote',
-            '--single-process',
             '--disable-gpu',
             '--disable-extensions',
             '--disable-background-networking',
@@ -157,6 +158,17 @@ if (chromiumPath) {
 }
 
 const client = new Client(clientOptions);
+
+// ── Auto-restart on Puppeteer/Chrome crash ──
+// جب بھی WhatsApp Web کا context crash ہو (یہی وہ error تھا)،
+// process پوری طرح ری اسٹارٹ کر دیں تاکہ Chrome صاف حالت میں دوبارہ شروع ہو۔
+process.on('unhandledRejection', (reason) => {
+    console.log('⚠️ Unhandled rejection پکڑا گیا:', reason && reason.message ? reason.message : reason);
+    if (reason && reason.message && reason.message.includes('Execution context was destroyed')) {
+        console.log('🔄 Chrome context crash ہوا — process ری اسٹارٹ ہو رہا ہے...');
+        process.exit(1); // Railway اسے خود دوبارہ شروع کر دے گا
+    }
+});
 
 // ── Events ──
 client.on('qr', (qr) => {
