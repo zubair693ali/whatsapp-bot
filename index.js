@@ -5,7 +5,7 @@ const axios = require('axios');
 const http = require('http');
 const QRCode = require('qrcode');
 
-const WEBSITE_URL = process.env.WEBSITE_URL || 'https://punjabgraphics.kesug.com';
+const WEBSITE_URL = process.env.WEBSITE_URL || 'https://punjabgraphics.alwaysdata.net';
 const CHECK_INTERVAL = process.env.CHECK_INTERVAL || '0 9 * * *';
 const PORT = process.env.PORT || 3000;
 
@@ -124,7 +124,7 @@ const chromiumPath = getChromiumPath();
 
 const clientOptions = {
     authStrategy: new LocalAuth({
-        dataPath: '/tmp/.wwebjs_auth'
+        dataPath: '/app/.wwebjs_auth'
     }),
     puppeteer: {
         headless: true,
@@ -191,10 +191,14 @@ client.on('auth_failure', (msg) => {
     isConnected = false;
 });
 
-client.on('ready', () => {
+client.on('ready', async () => {
     isConnected = true;
     currentQR = null;
     console.log('✅ WhatsApp Bot کامیابی سے connect ہو گیا!');
+    // پہلی بار فوری میسج بھیجیں
+    console.log('📨 پہلی بار تمام pending کو فوری میسج بھیج رہے ہیں...');
+    await sendPendingReminders();
+    // پھر روزانہ scheduler شروع کریں
     startScheduler();
 });
 
