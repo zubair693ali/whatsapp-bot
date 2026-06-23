@@ -138,13 +138,12 @@ const chromiumPath = getChromiumPath();
 
 const clientOptions = {
     authStrategy: new LocalAuth({
-        dataPath: '/app/.wwebjs_auth'
+        dataPath: process.env.WWEBJS_AUTH_PATH || '/tmp/.wwebjs_auth',
+        clientId: 'punjab-graphics-bot'
     }),
     puppeteer: {
         headless: true,
-        // NOTE: '--single-process' اور '--no-zygote' ہٹا دیے گئے ہیں۔
-        // یہ flags نئے Chromium ورژنز میں رینڈرر کریش کرواتے ہیں اور
-        // "Execution context was destroyed" والا error دیتے ہیں۔
+        timeout: 60000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -162,7 +161,8 @@ const clientOptions = {
             '--mute-audio',
             '--safebrowsing-disable-auto-update',
             '--ignore-certificate-errors',
-            '--ignore-ssl-errors'
+            '--ignore-ssl-errors',
+            '--disable-blink-features=AutomationControlled'
         ],
     }
 };
@@ -203,6 +203,19 @@ client.on('authenticated', () => {
 client.on('auth_failure', (msg) => {
     console.error('❌ Authentication fail:', msg);
     isConnected = false;
+    currentQR = null;
+    
+    // سلوبھی صفائی
+    console.log('🔄 5 سیکنڈ میں دوبارہ کوشش کریں گے...');
+    setTimeout(() => {
+        if (!isConnected) {
+            console.log('🔄 Browser session reset کر رہے ہیں...');
+            client.destroy().catch(err => console.log('Destroy error:', err));
+            setTimeout(() => {
+                client.initialize();
+            }, 2000);
+        }
+    }, 5000);
 });
 
 client.on('ready', async () => {
