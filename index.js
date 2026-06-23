@@ -28,7 +28,13 @@ const server = http.createServer(async (req, res) => {
             `);
         } else if (currentQR) {
             try {
-                const qrImage = await QRCode.toDataURL(currentQR);
+                const qrImage = await QRCode.toDataURL(currentQR, {
+                    errorCorrectionLevel: 'H',
+                    type: 'image/png',
+                    quality: 0.95,
+                    margin: 1,
+                    width: 300
+                });
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 res.end(`
                     <html>
