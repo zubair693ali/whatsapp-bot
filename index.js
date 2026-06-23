@@ -41,18 +41,26 @@ const server = http.createServer(async (req, res) => {
                     <head>
                         <meta charset="utf-8">
                         <title>Punjab Graphics Bot - QR Scan</title>
-                        <meta http-equiv="refresh" content="30">
+                        <meta http-equiv="refresh" content="120">
                     </head>
-                    <body style="text-align:center;font-family:Arial;padding:20px;background:#f0f0f0">
-                        <h2 style="color:#25D366">Punjab Graphics WhatsApp Bot</h2>
-                        <p style="font-size:18px">اپنے WhatsApp سے یہ QR Code scan کریں</p>
-                        <div style="background:white;display:inline-block;padding:20px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.2)">
-                            <img src="${qrImage}" style="width:300px;height:300px;display:block">
+                    <body style="text-align:center;font-family:Arial;padding:40px;background:#f0f0f0;margin:0">
+                        <h1 style="color:#25D366;margin-bottom:10px">Punjab Graphics WhatsApp Bot</h1>
+                        <p style="font-size:20px;color:#333;margin:10px 0 30px 0">اپنے WhatsApp سے یہ QR Code scan کریں</p>
+                        
+                        <div style="background:white;display:inline-block;padding:30px;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,0.15)">
+                            <img src="${qrImage}" style="width:400px;height:400px;display:block;image-rendering:pixelated">
                         </div>
-                        <p style="color:#666;margin-top:20px">
-                            WhatsApp کھولیں ➜ تین نقطے ➜ Linked Devices ➜ Link a Device
-                        </p>
-                        <p style="color:#999;font-size:14px">یہ صفحہ 30 سیکنڈ میں خود refresh ہوگا</p>
+                        
+                        <div style="margin-top:30px;background:white;padding:20px;border-radius:10px;max-width:500px;margin-left:auto;margin-right:auto">
+                            <p style="color:#333;margin:10px 0;font-size:16px"><strong>اسطریقے سے کریں:</strong></p>
+                            <p style="color:#666;margin:10px 0">1️⃣ اپنے WhatsApp کھولیں</p>
+                            <p style="color:#666;margin:10px 0">2️⃣ تین نقطے (⋯) پر کلک کریں</p>
+                            <p style="color:#666;margin:10px 0">3️⃣ "Linked Devices" منتخب کریں</p>
+                            <p style="color:#666;margin:10px 0">4️⃣ "Link a Device" پر کلک کریں</p>
+                            <p style="color:#666;margin:10px 0">5️⃣ یہ QR Code scan کریں</p>
+                        </div>
+                        
+                        <p style="color:#999;font-size:13px;margin-top:30px">⏱️ اگر scan نہیں ہو رہا تو 2 منٹ میں نیا QR آئے گا</p>
                     </body>
                     </html>
                 `);
