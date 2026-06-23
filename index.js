@@ -90,6 +90,39 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', connected: isConnected }));
     } else {
+    } else if (req.url === '/send-now') {
+        if (!isConnected) {
+            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`
+                <html>
+                <head><meta charset="utf-8"><title>Error</title></head>
+                <body style="text-align:center;padding:50px;font-family:Arial">
+                    <h2 style="color:red">❌ WhatsApp Connected نہیں ہے</h2>
+                    <p>براہ کرم پہلے QR code scan کریں</p>
+                    <a href="/">← واپس جائیں</a>
+                </body>
+                </html>
+            `);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`
+                <html>
+                <head><meta charset="utf-8"><title>Messages بھیج رہے ہیں</title></head>
+                <body style="text-align:center;padding:50px;font-family:Arial;background:#e8f5e9">
+                    <h2 style="color:green">✅ Messages بھیجنا شروع</h2>
+                    <p>تمام pending customers کو messages بھیجے جا رہے ہیں...</p>
+                    <p style="color:#666;font-size:14px">Logs میں progress دیکھیں</p>
+                    <a href="/">← واپس جائیں</a>
+                </body>
+                </html>
+            `);
+            
+            // Background میں messages بھیجیں
+            sendPendingReminders().catch(err => {
+                console.log('❌ sendPendingReminders error:', err);
+            });
+        }
+    } else {
         res.writeHead(404);
         res.end('Not found');
     }
@@ -251,50 +284,102 @@ function startScheduler() {
 // ── Pending Reminders ──
 async function sendPendingReminders() {
     try {
+        console.log(`🔗 API سے رابطہ: ${WEBSITE_URL}/api.php?action=getPendingList`);
+        
         const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList`, {
             timeout: 10000
         });
+        
+        console.log('📥 API Response:', JSON.stringify(response.data).substring(0, 100));
+        
         const pendingList = response.data;
 
-        if (!Array.isArray(pendingList) || pendingList.length === 0) {
+        if (!Array.isArray(pendingList)) {
+            console.log('⚠️ Response array نہیں ہے:', typeof pendingList);
+            return;
+        }
+
+        if (pendingList.length === 0) {
             console.log('✅ کوئی pending balance نہیں ہے');
             return;
         }
 
-        console.log(`📋 ${pendingList.length} pending accounts ملے`);
+        console.log(`\n📋 ${pendingList.length} pending accounts ملے\n`);
+
+        let sent = 0;
+        let failed = 0;
 
         for (const c of pendingList) {
-            if (!c.phone) continue;
+            console.log(`\n👤 Processing: ${c.name} - Phone: ${c.phone}`);
+            
+            if (!c.phone) {
+                console.log(`⚠️ Phone نمبر missing ہے`);
+                failed++;
+                continue;
+            }
+
             const phone = formatPhone(c.phone);
+            console.log(`📞 Formatted phone: ${phone}`);
+            
             if (!phone) {
-                console.log(`⚠️ غلط نمبر: ${c.phone}`);
+                console.log(`⚠️ غلط phone format: ${c.phone}`);
+                failed++;
                 continue;
             }
 
             const msg = `السلام علیکم *${c.name}* صاحب! 🙏\n\nPunjab Graphics یاد دہانی:\n📋 Bill: *${c.bill}*\n💰 بقایا: *Rs. ${c.balance}*\n\nبراہ کرم جلد ادائیگی فرمائیں۔\nشکریہ 🙏`;
 
             try {
+                console.log(`📤 Message بھیج رہے ہیں...`);
                 await client.sendMessage(phone, msg);
-                console.log(`✅ میسج بھیجا: ${c.name} (${c.phone})`);
+                console.log(`✅ ✅ میسج بھیجا: ${c.name} (${c.phone})`);
+                sent++;
                 await sleep(3000);
             } catch (e) {
-                console.log(`❌ میسج error (${c.name}):`, e.message);
+                console.log(`❌ ❌ میسج fail (${c.name}): ${e.message}`);
+                failed++;
             }
         }
 
-        console.log('✅ تمام reminders بھیج دیے گئے');
+        console.log(`\n📊 خلاصہ: ✅ ${sent} کامیاب | ❌ ${failed} ناکام`);
+        console.log('✅ تمام reminders کی کوشش مکمل ہوئی');
     } catch (e) {
         console.log('❌ API error:', e.message);
+        console.log('Stack:', e.stack);
     }
 }
 
 // ── Helpers ──
 function formatPhone(phone) {
-    let p = phone.toString().replace(/\D/g, '');
-    if (p.startsWith('0')) p = '92' + p.slice(1);
-    if (p.startsWith('3')) p = '92' + p;
-    if (p.length < 11) return null;
-    return p + '@c.us';
+    if (!phone) return null;
+    
+    let p = phone.toString().trim().replace(/\D/g, '');
+    console.log(`   [Format Step 1] Original: ${phone} → Digits only: ${p}`);
+    
+    // اگر 0 سے شروع ہو تو 92 سے replace کریں
+    if (p.startsWith('0')) {
+        p = '92' + p.slice(1);
+        console.log(`   [Format Step 2] 0 سے شروع تھا → ${p}`);
+    }
+    // اگر 3 سے شروع ہو تو 92 شامل کریں (Pakistan code)
+    else if (p.startsWith('3')) {
+        p = '92' + p;
+        console.log(`   [Format Step 2] 3 سے شروع تھا → ${p}`);
+    }
+    // اگر 92 سے شروع ہو تو ویسے ہی رہے
+    else if (p.startsWith('92')) {
+        console.log(`   [Format Step 2] پہلے سے 92 موجود ہے`);
+    }
+    
+    // Final validation
+    if (p.length < 12 || !p.startsWith('92')) {
+        console.log(`   [Format ERROR] Invalid length (${p.length}) یا شروع 92 سے نہیں`);
+        return null;
+    }
+    
+    const whatsappId = p + '@c.us';
+    console.log(`   [Format FINAL] WhatsApp ID: ${whatsappId}`);
+    return whatsappId;
 }
 
 function sleep(ms) {
