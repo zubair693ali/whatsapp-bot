@@ -285,8 +285,7 @@ async function sendPendingReminders() {
     try {
         console.log(`🔗 API سے رابطہ: ${WEBSITE_URL}/api.php?action=getPendingList`);
         
-        const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList`, {
-            timeout: 10000
+        const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList&secret=punjabgraphics2026`, {
         });
         
         console.log('📥 API Response:', JSON.stringify(response.data).substring(0, 100));
