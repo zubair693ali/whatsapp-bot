@@ -89,7 +89,6 @@ const server = http.createServer(async (req, res) => {
     } else if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', connected: isConnected }));
-    } else {
     } else if (req.url === '/send-now') {
         if (!isConnected) {
             res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
