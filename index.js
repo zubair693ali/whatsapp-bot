@@ -198,7 +198,8 @@ const clientOptions = {
     }),
     puppeteer: {
         headless: true,
-        timeout: 60000,
+        timeout: 120000,
+        protocolTimeout: 120000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
