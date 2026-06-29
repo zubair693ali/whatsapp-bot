@@ -198,8 +198,8 @@ const clientOptions = {
     }),
     puppeteer: {
         headless: true,
-        timeout: 120000,
-        protocolTimeout: 120000,
+        timeout: 300000,
+        protocolTimeout: 300000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -358,7 +358,7 @@ async function sendPendingReminders() {
                 await client.sendMessage(phone, msg);
                 console.log(`✅ ✅ میسج بھیجا: ${c.name} (${c.phone})`);
                 sent++;
-                await sleep(3000);
+                await sleep(5000);
             } catch (e) {
                 console.log(`❌ ❌ میسج fail (${c.name}): ${e.message}`);
                 failed++;
