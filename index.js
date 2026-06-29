@@ -121,6 +121,29 @@ const server = http.createServer(async (req, res) => {
                 console.log('❌ sendPendingReminders error:', err);
             });
         }
+    } else if (req.url.startsWith('/test-bill')) {
+        // مخصوص bill پر test میسج بھیجیں — مثلاً: /test-bill?bill=2602
+        const urlParams = new URL(req.url, `http://localhost`);
+        const billNo = urlParams.searchParams.get('bill') || '2602';
+
+        if (!isConnected) {
+            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<h2 style="color:red;font-family:Arial;padding:40px">❌ WhatsApp Connected نہیں ہے</h2>`);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`
+                <html><head><meta charset="utf-8"></head>
+                <body style="font-family:Arial;padding:40px;background:#e8f5e9">
+                    <h2 style="color:green">🔍 Bill #${billNo} کو test میسج بھیج رہے ہیں...</h2>
+                    <p>Railway Logs میں نتیجہ دیکھیں</p>
+                    <a href="/">← واپس جائیں</a>
+                </body></html>
+            `);
+            // Background میں test بھیجیں
+            sendTestBill(billNo).catch(err => {
+                console.log('❌ sendTestBill error:', err.message);
+            });
+        }
     } else {
         res.writeHead(404);
         res.end('Not found');
@@ -288,17 +311,19 @@ async function sendPendingReminders() {
         const response = await axios.get(`${WEBSITE_URL}/api.php?action=getPendingList&key=punjabgraphics2026`, {
         });
         
-        console.log('📥 API Response:', JSON.stringify(response.data).substring(0, 100));
+        console.log('📥 API Response:', JSON.stringify(response.data).substring(0, 200));
         
-        const pendingList = response.data;
+        // api.php اب {list:[], total:N, skipped:[]} واپس کرتا ہے
+        const apiData = response.data;
+        const pendingList = Array.isArray(apiData) ? apiData : (apiData.list || []);
+        const skipped    = apiData.skipped || [];
 
-        if (!Array.isArray(pendingList)) {
-            console.log('⚠️ Response array نہیں ہے:', typeof pendingList);
-            return;
+        if (skipped.length > 0) {
+            console.log(`⚠️ ${skipped.length} bills میں phone نمبر نہیں — skip: [${skipped.join(', ')}]`);
         }
 
         if (pendingList.length === 0) {
-            console.log('✅ کوئی pending balance نہیں ہے');
+            console.log('✅ کوئی pending balance نہیں ہے (یا سب کے phone missing ہیں)');
             return;
         }
 
@@ -378,6 +403,45 @@ function formatPhone(phone) {
     const whatsappId = p + '@c.us';
     console.log(`   [Format FINAL] WhatsApp ID: ${whatsappId}`);
     return whatsappId;
+}
+
+// ── Single Bill Test ──
+async function sendTestBill(billNo) {
+    try {
+        console.log(`\n🔍 Bill #${billNo} کی معلومات لے رہے ہیں...`);
+        const response = await axios.get(
+            `${WEBSITE_URL}/api.php?action=getSinglePending&bill=${billNo}&key=punjabgraphics2026`
+        );
+        const c = response.data;
+        console.log('📥 Bill data:', JSON.stringify(c));
+
+        if (c.error) {
+            console.log(`❌ Bill ${billNo}: ${c.error}`);
+            return;
+        }
+        if (!c.has_phone) {
+            console.log(`⚠️ Bill ${billNo} (${c.name}) میں phone نمبر نہیں ہے — میسج نہیں بھیجا جا سکتا`);
+            return;
+        }
+        if (!c.ready) {
+            console.log(`ℹ️ Bill ${billNo} (${c.name}) پہلے سے paid ہے یا balance نہیں`);
+            return;
+        }
+
+        const phone = formatPhone(c.phone);
+        if (!phone) {
+            console.log(`⚠️ Phone format غلط ہے: ${c.phone}`);
+            return;
+        }
+
+        const msg = `السلام علیکم *${c.name}* صاحب! 🙏\n\nPunjab Graphics یاد دہانی:\n📋 Bill: *${c.bill}*\n💰 بقایا: *Rs. ${c.balance}*\n\nبراہ کرم جلد ادائیگی فرمائیں۔\nشکریہ 🙏`;
+
+        console.log(`📤 Test میسج بھیج رہے ہیں → ${c.name} (${c.phone})`);
+        await client.sendMessage(phone, msg);
+        console.log(`✅ Test میسج کامیابی سے بھیجا گیا! Bill #${billNo} → ${c.name}`);
+    } catch (e) {
+        console.log(`❌ sendTestBill error:`, e.message);
+    }
 }
 
 function sleep(ms) {
